@@ -7,7 +7,14 @@
 # ///
 
 """
-Tmux wrapper CLI that auto-detects when command output is complete.
+Tmux wrapper for sending commands to tmux sessions with auto-detection of completion.
+
+Usage:
+    # Create tmux session first (use regular tmux)
+    tmux new-session -d -s mysession -c ~/mydir
+
+    # Send commands using wrapper (auto-waits for completion)
+    tmux_wrapper.py send-keys -t mysession "echo hello"
 """
 
 import click
@@ -153,71 +160,8 @@ def session_exists(session_name: str) -> bool:
 
 @click.group()
 def cli():
-    """Tmux wrapper with auto-detection of output completion."""
+    """Tmux wrapper for sending commands with auto-detection of completion."""
     pass
-
-
-@cli.command(name="new-tmux-session")
-@click.option("-s", "--session-name", required=True, help="Session name")
-@click.option("-c", "--start-directory", help="Working directory")
-@click.argument("command", required=True)
-def new_tmux_session(
-    session_name: str,
-    start_directory: Optional[str],
-    command: str
-):
-    """
-    Create a new detached tmux session with fallback shell and wait for output completion.
-
-    Example:
-        tmux_wrapper.py new-tmux-session -s mysession -c ~/mydir "echo hello && sleep 1 && echo world"
-    """
-    # Check if session already exists
-    if session_exists(session_name):
-        click.echo(f"Error: Session '{session_name}' already exists", err=True)
-        sys.exit(1)
-
-    # Add fallback shell for debugging if command fails
-    fallback_cmd = f'echo "ERROR: Command failed. Opening shell for debugging." && exec bash'
-    wrapped_command = f'{command} || ({fallback_cmd})'
-
-    # Build tmux command (always detached)
-    tmux_cmd = ["tmux", "new-session", "-d"]
-    tmux_cmd.extend(["-s", session_name])
-    if start_directory:
-        tmux_cmd.extend(["-c", start_directory])
-    tmux_cmd.append(wrapped_command)
-
-    # Create session
-    try:
-        result = subprocess.run(tmux_cmd, capture_output=True, text=True, timeout=5)
-        if result.returncode != 0:
-            click.echo(f"Error creating session: {result.stderr}", err=True)
-            sys.exit(1)
-    except subprocess.TimeoutExpired:
-        click.echo("Error: tmux new-session command timed out", err=True)
-        sys.exit(1)
-
-    # Give session a moment to initialize
-    time.sleep(0.1)
-
-    # Check if session still exists (command might have failed immediately)
-    if not session_exists(session_name):
-        click.echo(f"Error: Session '{session_name}' exited immediately", err=True)
-        sys.exit(1)
-
-    # Wait for prompt to appear
-    output, timed_out, session_exited = wait_for_output_completion(session_name, command)
-
-    # Print output
-    click.echo(output, nl=False)
-
-    if session_exited:
-        click.echo(f"\n[Session exited - command completed]", err=True)
-        sys.exit(0)
-    elif timed_out:
-        click.echo(f"\n[Timeout after 20s - session still running]", err=True)
-        sys.exit(2)
 
 
 @cli.command(name="send-keys")
