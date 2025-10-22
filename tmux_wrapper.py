@@ -64,13 +64,15 @@ def wait_for_output_completion(
     start_time = time.time()
     poll_interval = 0.1  # 100ms polling
 
-    # Prompt patterns that indicate command is done
+    # Prompt patterns that indicate command is done (or waiting for input)
     prompt_patterns = [
         "pry(main)>",  # Rails console
         "]$",          # Bash prompt like [user@host dir]$
         "]#",          # Root bash prompt like [root@host dir]#
         "#",           # Shell prompt with #
         "$",           # Shell prompt with $
+        "(END)",       # less pager at end of output
+        ":",           # vim-like pager prompt (when alone at end of line)
     ]
 
     # Capture initial output to avoid matching stale prompts
@@ -167,10 +169,12 @@ def cli():
 @cli.command(name="send-keys")
 @click.option("-t", "--target-session", required=True, help="Target session name")
 @click.option("--no-enter", is_flag=True, help="Don't send Enter key after command")
+@click.option("--timeout", type=int, default=60, help="Maximum wait time in seconds (default: 60)")
 @click.argument("keys", required=True)
 def send_keys(
     target_session: str,
     no_enter: bool,
+    timeout: int,
     keys: str
 ):
     """
@@ -178,6 +182,7 @@ def send_keys(
 
     Example:
         tmux_wrapper.py send-keys -t mysession "echo hello && sleep 1 && echo world"
+        tmux_wrapper.py send-keys -t mysession --timeout 120 "long running command"
     """
     # Check if session exists
     if not session_exists(target_session):
@@ -206,6 +211,7 @@ def send_keys(
     output, timed_out, session_exited = wait_for_output_completion(
         target_session,
         keys,
+        max_wait_sec=timeout,
         pre_command_output=pre_command_output
     )
 
@@ -216,7 +222,7 @@ def send_keys(
         click.echo(f"\n[Session exited]", err=True)
         sys.exit(1)
     elif timed_out:
-        click.echo(f"\n[Timeout after 20s - session still running]", err=True)
+        click.echo(f"\n[Timeout after {timeout}s - session still running]", err=True)
         sys.exit(2)
 
 
