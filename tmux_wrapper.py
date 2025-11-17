@@ -71,6 +71,7 @@ def wait_for_output_completion(
         "]#",          # Root bash prompt like [root@host dir]#
         "#",           # Shell prompt with #
         "$",           # Shell prompt with $
+        ">",           # Shell prompt with >
         "(END)",       # less pager at end of output
         ":",           # vim-like pager prompt (when alone at end of line)
     ]
